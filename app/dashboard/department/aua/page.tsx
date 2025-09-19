@@ -148,6 +148,50 @@ export default function DepartmentAuaKuaPage() {
     setLoading(false);
   };
 
+  // Delete evidence file
+  const handleFileDelete = async (fileUrl: string) => {
+    if (!currentAnswer) return;
+    setLoading(true);
+
+    try {
+      // Extract base public URL
+      const bucketUrl = supabase.storage.from("evidence").getPublicUrl("").data.publicUrl;
+      const filePath = fileUrl.replace(bucketUrl, "").replace(/^\/+/, "");
+
+      // Delete from Supabase storage
+      const { error: deleteError } = await supabase.storage
+        .from("evidence")
+        .remove([filePath]);
+
+      if (deleteError) {
+        console.error("Delete failed:", deleteError);
+        alert("Failed to delete file.");
+        setLoading(false);
+        return;
+      }
+
+      // Update state
+      const updatedFiles = currentAnswer.uploaded_files.filter(
+        (file) => file.url !== fileUrl
+      );
+
+      const updatedAnswer = { ...currentAnswer, uploaded_files: updatedFiles };
+      setCurrentAnswer(updatedAnswer);
+
+      // Persist in DB
+      const { error: updateError } = await supabase
+        .from("compliance_answers")
+        .update({ uploaded_files: updatedFiles, updated_at: new Date() })
+        .eq("id", currentAnswer.id);
+
+      if (updateError) console.error("DB update error:", updateError);
+    } catch (err) {
+      console.error("Unexpected delete error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Update comment
   const handleCommentChange = (comment: string) => {
     if (!currentAnswer) return;
@@ -257,9 +301,9 @@ export default function DepartmentAuaKuaPage() {
               disabled={loading}
             />
             {currentAnswer.uploaded_files.length > 0 && (
-              <ul className="list-disc list-inside mt-2">
+              <ul className="list-disc list-inside mt-2 space-y-1">
                 {currentAnswer.uploaded_files.map((file, idx) => (
-                  <li key={idx}>
+                  <li key={idx} className="flex items-center justify-between">
                     <a
                       href={file.url}
                       target="_blank"
@@ -268,6 +312,14 @@ export default function DepartmentAuaKuaPage() {
                     >
                       {file.name}
                     </a>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleFileDelete(file.url)}
+                      disabled={loading}
+                    >
+                      Delete
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -333,9 +385,12 @@ export default function DepartmentAuaKuaPage() {
                   <strong>Evidences:</strong> {controlRef?.evidences.join(", ")}
                 </p>
                 {q.uploaded_files.length > 0 && (
-                  <ul className="list-disc list-inside mt-2">
+                  <ul className="list-disc list-inside mt-2 space-y-1">
                     {q.uploaded_files.map((file, fileIdx) => (
-                      <li key={fileIdx}>
+                      <li
+                        key={fileIdx}
+                        className="flex items-center justify-between"
+                      >
                         <a
                           href={file.url}
                           target="_blank"
@@ -344,6 +399,14 @@ export default function DepartmentAuaKuaPage() {
                         >
                           {file.name}
                         </a>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleFileDelete(file.url)}
+                          disabled={loading}
+                        >
+                          Delete
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -359,4 +422,3 @@ export default function DepartmentAuaKuaPage() {
     </div>
   );
 }
-
